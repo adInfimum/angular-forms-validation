@@ -60,13 +60,16 @@ export class AppComponent {
         },
       },
       (m) => {
-        m.someInt.required('The int field is a must!');
-        m.innerObj.intArray[0].test(
-          (v) => v >= 0 && v <= 100,
-          'The array elements are percentages, duh!'
+        m.someInt.should.beInteger.notBeEmpty.orEmitError(
+          'The int field is a must!'
         );
-        m.someText.matches(/^A/, "This needs to start with 'A'.");
-        m.someText.required('The string is necessary');
+        m.innerObj.intArray[0].should
+          .satisfy((v) => v >= 0 && v <= 100)
+          .orEmitError('The array elements are percentages, duh!');
+        m.someText.should
+          .match(/^A/)
+          .orEmitError("This needs to start with 'A'.");
+        m.someText.should.notBeEmpty.orEmitError('The string is necessary');
       }
     );
     const f2 = createFormGroup(

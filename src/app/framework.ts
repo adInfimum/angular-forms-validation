@@ -1,3 +1,4 @@
+import { group } from '@angular/animations';
 import {
   AbstractControl,
   AsyncValidatorFn,
@@ -15,8 +16,12 @@ class TypeInfo<T> {
   constructor(public readonly typeid: string) {}
 }
 
-function isPrimitiveTypeInfo(x: any): x is TypeInfo<any> {
+function isPrimitiveTypeInfo(x: any, v?: any): x is TypeInfo<any> {
   return !!x.typeid;
+}
+
+function assertType<T>(x: any): x is T {
+  return true;
 }
 
 type ModelTypeInfo<T> = T extends boolean
@@ -57,8 +62,12 @@ class Model<T> {
     public readonly validations: ModelValidation<T, T>
   ) {}
 
-  public subModel<E>(accessor: (m: ModelTypeInfo<T>) => ModelTypeInfo<E>): Model<E> {
-    const specAccessor = accessor as unknown as (m: ModelValidation<T, T>) => ModelValidation<E, E>;
+  public subModel<E>(
+    accessor: (m: ModelTypeInfo<T>) => ModelTypeInfo<E>
+  ): Model<E> {
+    const specAccessor = accessor as unknown as (
+      m: ModelValidation<T, T>
+    ) => ModelValidation<E, E>;
     return new Model(accessor(this.types), specAccessor(this.validations));
   }
 }
@@ -77,7 +86,11 @@ type ModelValidation<T, G> = T extends boolean
 
 type AnyValidatorFn = ValidatorFn | AsyncValidatorFn;
 
-class Validation<T, G> implements ValidationSpecStart<T> {
+interface Validation<T, G> extends ValidationSpecStart<T> {
+  get group(): ValidationSpecStart<G>;
+}
+
+class ValidationImpl<T, G> implements Validation<T, G> {
   validators: ValidatorFn[] = [];
   asyncValidators: AsyncValidatorFn[] = [];
   groupValidators: ValidatorFn[] = [];
@@ -92,7 +105,7 @@ class Validation<T, G> implements ValidationSpecStart<T> {
     ) as unknown as ValidationSpec<T>;
   }
 
-  public get group(): ValidationSpecStart<G> {
+  public get group() {
     return {
       should: new ValidationSpecImp<G>(
         (v) => this.groupValidators.push(v),
@@ -116,36 +129,51 @@ interface ValidationSpecStart<T> {
 }
 
 interface CommonValidationSpec<T> {
-  get notBeEmpty(): ValidationConditions<T>;
-  satisfy(condition: ValidCondition<T>): ValidationConditions<T>;
-  satisfyAsync(condition: AsyncValidCondition<T>): ValidationConditions<T>;
+  get notBeEmpty(): CommonValidationSpec2<T>;
+  satisfy(condition: ValidCondition<T>): CommonValidationSpec2<T>;
+  satisfyAsync(condition: AsyncValidCondition<T>): CommonValidationSpec2<T>;
 }
 
-interface NumberValidationSpec<T> {
-  get beInteger(): ValidationConditions<T>;
-  get beFloat(): ValidationConditions<T>;
+interface CommonValidationSpec2<T>
+  extends CommonValidationSpec<T>,
+    ValidationCondition<T> {}
+
+interface NumberValidationSpec<T> extends CommonValidationSpec<T> {
+  get beInteger(): NumberValidationSpec2<T>;
+  get beFloat(): this;
 }
+
+interface NumberValidationSpec2<T>
+  extends NumberValidationSpec<T>,
+    ValidationCondition<T> {}
 
 interface StringValidationSpec<T> extends LengthValidationSpec<T> {
-  match(pattern: RegExp): ValidationConditions<T>;
+  match(pattern: RegExp): StringValidationSpec2<T>;
 }
 
-interface LengthValidationSpec<T> {
-  beLongerThan(l: number): ValidationConditions<T>;
-  beShorterThan(l: number): ValidationConditions<T>;
-  haveLength(l: number): ValidationConditions<T>;
+interface StringValidationSpec2<T>
+  extends StringValidationSpec<T>,
+    ValidationCondition<T> {}
+
+interface LengthValidationSpec<T> extends CommonValidationSpec<T> {
+  beLongerThan(l: number): LengthValidationSpec2<T>;
+  beShorterThan(l: number): LengthValidationSpec2<T>;
+  haveLength(l: number): LengthValidationSpec2<T>;
 }
 
-type ValidationSpec<T> = CommonValidationSpec<T> &
-  (T extends number
-    ? NumberValidationSpec<T>
-    : T extends string
-    ? StringValidationSpec<T>
-    : T extends HasLegth
-    ? LengthValidationSpec<T>
-    : {});
+interface LengthValidationSpec2<T>
+  extends LengthValidationSpec<T>,
+    ValidationCondition<T> {}
 
-interface ValidationConditions<T> extends ValidationTermination<T> {
+type ValidationSpec<T> = T extends number
+  ? NumberValidationSpec<T>
+  : T extends string
+  ? StringValidationSpec<T>
+  : T extends HasLegth
+  ? LengthValidationSpec<T>
+  : {};
+
+interface ValidationCondition<T> extends ValidationTermination<T> {
   when(condition: ValidCondition<T>): ValidationTermination<T>;
 }
 
@@ -158,7 +186,6 @@ class ValidationSpecImp<T>
     CommonValidationSpec<T>,
     NumberValidationSpec<T>,
     StringValidationSpec<T>,
-    ValidationConditions<T>,
     ValidationTermination<T>
 {
   constructor(
@@ -169,11 +196,22 @@ class ValidationSpecImp<T>
   private currentValidator: ValidCondition<T>;
   private currentAsyncValidator: AsyncValidCondition<T>;
 
-  public get notBeEmpty() {
-    this.currentValidator = function (v) {
-      return !!v;
-    };
+  private combine(c: ValidCondition<T>) {
+    if (!!this.currentValidator) {
+      const existingValidator = this.currentValidator;
+      this.currentValidator = function (v) {
+        return existingValidator(v) && c(v);
+      };
+    } else {
+      this.currentValidator = c;
+    }
     return this;
+  }
+
+  public get notBeEmpty() {
+    return this.combine(function (v) {
+      return !!v;
+    });
   }
 
   // Should be on a sub-object so it can't be invoked at the start
@@ -181,21 +219,19 @@ class ValidationSpecImp<T>
     // I think we don't want an arrow function, we don't want to capture `this`
     const existingValidator = this.currentValidator;
     this.currentValidator = function (v) {
-      return condition(v) || this.currentValidator;
+      return condition(v) ? this.currentValidator : true;
     };
     return this;
   }
 
   public match(regex: RegExp) {
-    this.currentValidator = function (v) {
+    return this.combine(function (v) {
       return !v || !!v.toString().match(regex);
-    };
-    return this;
+    });
   }
 
   public satisfy(condition: ValidCondition<T>) {
-    this.currentValidator = condition;
-    return this;
+    return this.combine(condition);
   }
 
   public satisfyAsync(condition: AsyncValidCondition<T>) {
@@ -204,38 +240,39 @@ class ValidationSpecImp<T>
   }
 
   public get beInteger() {
-    this.currentValidator = function (v) {
-      return !v || !isNaN(parseInt(v.toString(), 10));
-    };
-    return this;
+    return this.combine(function (v) {
+      return (
+        !v ||
+        !(
+          isNaN(v as unknown as number) ||
+          parseInt(v.toString(), 10) !== parseFloat(v.toString())
+        )
+      );
+    });
   }
 
   public get beFloat() {
-    this.currentValidator = function (v) {
-      return !v || !isNaN(parseFloat(v.toString()));
-    };
-    return this;
+    return this.combine(function (v) {
+      return !v || !isNaN(v as unknown as number);
+    });
   }
 
   public beLongerThan(l: number) {
-    this.currentValidator = function (v) {
+    return this.combine(function (v) {
       return (v as unknown as HasLegth)?.length > l;
-    };
-    return this;
+    });
   }
 
   beShorterThan(l: number) {
-    this.currentValidator = function (v) {
+    return this.combine(function (v) {
       return (v as unknown as HasLegth)?.length < l;
-    };
-    return this;
+    });
   }
 
   haveLength(l: number) {
-    this.currentValidator = function (v) {
+    return this.combine(function (v) {
       return (v as unknown as HasLegth)?.length === l;
-    };
-    return this;
+    });
   }
 
   public orEmitError(message: string) {
@@ -265,13 +302,13 @@ function createValidations<T>(
       switch (field.typeid) {
         case 'int':
         case 'float':
-          validations[prop] = new Validation<number, T>(field);
+          validations[prop] = new ValidationImpl<number, T>(field);
           break;
         case 'string':
-          validations[prop] = new Validation<string, T>(field);
+          validations[prop] = new ValidationImpl<string, T>(field);
           break;
         case 'boolean':
-          validations[prop] = new Validation<boolean, T>(field);
+          validations[prop] = new ValidationImpl<boolean, T>(field);
           break;
       }
     } else if (Array.isArray(field)) {
@@ -308,12 +345,67 @@ export type FormControls<T> = T extends boolean
       -readonly [Key in keyof T]-?: FormControls<T[Key]>;
     }>;
 
-type ControlsInside<T> = {
+type ControlsInsideGroup<T> = {
   -readonly [Key in keyof T]-?: FormControls<T[Key]>;
 };
 
-export function createFormControl<T>(value: T, model: Model<T>): FormControl<T> {
-  const fieldValidation = model.validations as unknown as Validation<T, T>;
+type ControlsInsideArray<T> = FormControl<ElementyType<T>>;
+
+type ControlsInside<T> = T extends {}
+  ? ControlsInsideGroup<T>
+  : T extends Array<infer E>
+  ? ControlsInsideArray<T>[]
+  : T;
+
+type ElementyType<T> = T extends Array<infer E> ? E : never;
+
+function createAbstractControl<T>(
+  value: T,
+  model: Model<T>,
+  groupValidators?: ValidatorFn[],
+  asyncGroupValidators?: AsyncValidatorFn[]
+): AbstractControl<ControlsInside<T>> {
+  if (isPrimitiveTypeInfo(model.types)) {
+    return createFormControl<T>(
+      value,
+      model,
+      groupValidators,
+      asyncGroupValidators
+    ) as AbstractControl<T> as AbstractControl<ControlsInside<T>>;
+  } else if (Array.isArray(model.types)) {
+    return createFormArray(
+      value,
+      model,
+      groupValidators,
+      asyncGroupValidators
+    ) as AbstractControl<ControlsInsideArray<T>[]> as AbstractControl<
+      ControlsInside<T>
+    >;
+  } else {
+    return createFormGroup(
+      value,
+      model,
+      groupValidators,
+      asyncGroupValidators
+    ) as AbstractControl<ControlsInsideGroup<T>> as AbstractControl<
+      ControlsInside<T>
+    >;
+  }
+}
+
+export function createFormControl<T>(
+  value: T,
+  model: Model<T>,
+  groupValidators?: ValidatorFn[],
+  asyncGroupValidators?: AsyncValidatorFn[]
+): FormControl<T> {
+  const fieldValidation = model.validations as unknown as ValidationImpl<T, T>;
+  if (Array.isArray(groupValidators)) {
+    groupValidators.push(...fieldValidation.groupValidators);
+  }
+  if (Array.isArray(asyncGroupValidators)) {
+    asyncGroupValidators.push(...fieldValidation.asyncGroupValidators);
+  }
   return new FormControl<T>(value, {
     validators: fieldValidation.validators,
     asyncValidators: fieldValidation.asyncValidators,
@@ -322,81 +414,59 @@ export function createFormControl<T>(value: T, model: Model<T>): FormControl<T> 
 
 export function createFormGroup<T>(
   value: T,
-  model: Model<T>
-): FormGroup<ControlsInside<T>> {
+  model: Model<T>,
+  externalGroupValidators?: ValidatorFn[],
+  externalAsyncGroupValidators?: AsyncValidatorFn[]
+): FormGroup<ControlsInsideGroup<T>> {
   const controls = {};
   const groupValidators = [];
-  const asyncGroupValidator = [];
+  const asyncGroupValidators = [];
   for (const prop of Object.keys(model.types)) {
     const field = model.types[prop];
     if (isPrimitiveTypeInfo(field)) {
-      const fieldValidation = model.validations[prop] as Validation<number|string|boolean, T>;
-      controls[prop] = createFormControl(value[prop], model.subModel(m => m[prop]));
-      groupValidators.push(...fieldValidation.groupValidators);
-      asyncGroupValidator.push(...fieldValidation.asyncGroupValidators);
-      // switch (field.typeid) {
-      //   case 'int':
-      //   case 'float':
-      //     const fieldValidation = model.validations[prop] as Validation<number, T>;
-      //     controls[prop] = new FormControl<number>(value[prop], {
-      //       validators: fieldValidation.validators,
-      //       asyncValidators: fieldValidation.asyncValidators,
-      //     });
-      //     groupValidators.push(...fieldValidation.groupValidators);
-      //     asyncGroupValidator.push(...fieldValidation.asyncGroupValidators);
-      //     break;
-      //   case 'string':
-      //     controls[prop] = new FormControl<string>(
-      //       value[prop],
-      //       model.validations[prop]
-      //     );
-      //     break;
-      //   case 'boolean':
-      //     controls[prop] = new FormControl<boolean>(
-      //       value[prop],
-      //       model.validations[prop]
-      //     );
-      //     break;
-      // }
-    } else if (Array.isArray(field)) {
-      const fieldValidation = model.validations[prop][0] as Validation<{}, Array<{}>>;
-      const dummy = createFormGroup(
+      controls[prop] = createFormControl(
         value[prop],
-        new Model<{field: {}}>(
-          { field: fieldValidation.typeInfo},
-          { field: fieldValidation }
-        )
+        model.subModel((m) => m[prop]),
+        groupValidators,
+        asyncGroupValidators
       );
-      const control = dummy.controls.field;
-      dummy.removeControl(control); // I don't want some crap registered to the dummy group leaking any memory
-      controls[prop] = new FormArray<any>([control]);
+    } else if (Array.isArray(field)) {
+      controls[prop] = createFormArray(
+        value[prop],
+        model.subModel((m) => m[prop])
+      );
     } else {
       controls[prop] = createFormGroup(
         value[prop],
-        new Model(model.types[prop], model.validations[prop])
+        model.subModel((m) => m[prop])
       );
     }
   }
-  return new FormGroup<ControlsInside<T>>(controls as ControlsInside<T>);
+  return new FormGroup<ControlsInsideGroup<T>>(
+    controls as ControlsInsideGroup<T>,
+    { validators: groupValidators, asyncValidators: asyncGroupValidators }
+  );
 }
 
-export function createFormArray<V>(
-  value: V[],
-  model: Model<V[]>
-): FormArray<FormControls<V>> {
-  const fieldValidation = model.validations[0];
+export function createFormArray<T>(
+  value: T,
+  model: Model<T>,
+  externalGroupValidators?: ValidatorFn[],
+  externalAsyncGroupValidators?: AsyncValidatorFn[]
+): FormArray<ControlsInsideArray<T>> {
+  const arrayModel = model.subModel((m) => m[0]);
   const controls = [];
-  for (const e of value) {
-
+  if (Array.isArray(value)) {
+    for (const e of value) {
+      controls.push(createAbstractControl(e, arrayModel));
+    }
   }
-  const dummy = createFormGroup(
-    value[prop],
-    new Model<{field: {}}>(
-      { field: fieldValidation.typeInfo},
-      { field: fieldValidation }
-    )
-  );
-  const control = dummy.controls.field;
-  dummy.removeControl(control); // I don't want some crap registered to the dummy group leaking any memory
-  controls[prop] = new FormArray<any>([control]);
+  const fieldValidation = arrayModel.validations as ValidationImpl<
+    ElementyType<T>,
+    T
+  >;
+  return new FormArray(controls, {
+    validators: fieldValidation.groupValidators,
+    asyncValidators: fieldValidation.asyncGroupValidators,
+  });
 }
