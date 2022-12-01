@@ -1,3 +1,5 @@
+import { interval } from 'rxjs';
+import { first, map } from 'rxjs/operators';
 import { ModelTypeInfo, PrimitiveType, Types } from './framework/types';
 import { modelValidation } from './framework/validation';
 
@@ -42,6 +44,14 @@ export const dataModel = modelValidation<Data>(
     m.someInt.should.beInteger.notBeEmpty.orEmitError(
       'The int field is a must!'
     );
+    m.someInt.should
+      .satisfyAsync((v) =>
+        interval(500).pipe(
+          first(),
+          map(() => v > 100)
+        )
+      )
+      .orEmitError('Async validation failed');
     m.opaqueType.should.notBeEmpty.orEmitError(
       'Has to have this silly complex value too'
     );

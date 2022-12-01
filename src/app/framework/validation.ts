@@ -1,5 +1,5 @@
 import { AsyncValidatorFn, ValidatorFn } from '@angular/forms';
-import { map, Observable, of } from 'rxjs';
+import { from, map, Observable } from 'rxjs';
 import {
   isPrimitiveTypeInfo,
   ModelTypeInfo,
@@ -231,10 +231,10 @@ class ValidationSpecImp<T>
       this.complete(function (c) {
         return existingValidator(c.value) ? null : { error: message };
       });
-    } else {
-      const existingValidator = this.currentValidator;
-      this.completeAsync(async function (c) {
-        return of(existingValidator(c.value)).pipe(
+    } else if (this.currentAsyncValidator) {
+      const existingValidator = this.currentAsyncValidator;
+      this.completeAsync(function (c) {
+        return from(existingValidator(c.value)).pipe(
           map((ret) => (ret ? null : { error: message }))
         );
       });
