@@ -1,0 +1,10 @@
+<hello name="{{ name }}"></hello>
+<p>Start editing to see some magic happen :)</p>
+
+<form [formGroup]="form">
+  <input formControlName="someInt" />
+  <input formControlName="someText" />
+</form>
+
+<p>Form status: {{ form.status }}</p>
+<p>Form errors: {{ allErrors() }}</p>
