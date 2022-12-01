@@ -8,17 +8,13 @@ export function isPrimitiveTypeInfo(x: any, v?: any): x is TypeInfo<any> {
   return !!x.typeid;
 }
 
-export type ModelTypeInfo<T> = T extends boolean
-  ? TypeInfo<boolean>
-  : T extends number
-  ? TypeInfo<number>
-  : T extends string
-  ? TypeInfo<string>
+export type ModelTypeInfo<T> = T extends {}
+  ? {
+      -readonly [Key in keyof T]-?: ModelTypeInfo<T[Key]>;
+    }
   : T extends Array<infer E>
   ? Array<ModelTypeInfo<E>>
-  : {
-      -readonly [Key in keyof T]-?: ModelTypeInfo<T[Key]>;
-    };
+  : TypeInfo<T>;
 
 export class Types {
   public static get int() {

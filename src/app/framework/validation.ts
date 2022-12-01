@@ -20,17 +20,13 @@ export class Model<T> {
   }
 }
 
-export type ModelValidation<T, G> = T extends boolean
-  ? Validation<boolean, G>
-  : T extends number
-  ? Validation<number, G>
-  : T extends string
-  ? Validation<string, G>
+export type ModelValidation<T, G> = T extends {}
+  ? {
+      -readonly [Key in keyof T]-?: ModelValidation<T[Key], T>;
+    }
   : T extends Array<infer E>
   ? Array<ModelValidation<E, Array<E>>>
-  : {
-      -readonly [Key in keyof T]-?: ModelValidation<T[Key], T>;
-    };
+  : Validation<T, G>;
 
 export interface Validation<T, G> extends ValidationSpecStart<T> {
   get group(): ValidationSpecStart<G>;
