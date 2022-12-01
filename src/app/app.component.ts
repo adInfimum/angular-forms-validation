@@ -1,23 +1,7 @@
 import { Component, VERSION } from '@angular/core';
-import {
-  createFormGroup,
-  FormControls,
-  modelValidation,
-  Types,
-} from './framework';
+import { createFormGroup, FormControls } from './framework/forms';
+import { Data, dataModel } from './model';
 import { combineErrorsToObject } from './support';
-
-interface Data {
-  someInt: number;
-  someText: string;
-  innerObj: {
-    someBoolean?: boolean;
-    embedded: {
-      anotherInt: number;
-    };
-    intArray: number[];
-  };
-}
 
 @Component({
   selector: 'my-app',
@@ -49,29 +33,6 @@ export class AppComponent {
     // let value: FormValue<typeof f>;
     // value = f.value;
 
-    const model = modelValidation<Data>(
-      {
-        someInt: Types.int,
-        someText: Types.string,
-        innerObj: {
-          someBoolean: Types.boolean,
-          embedded: { anotherInt: Types.int },
-          intArray: [Types.int],
-        },
-      },
-      (m) => {
-        m.someInt.should.beInteger.notBeEmpty.orEmitError(
-          'The int field is a must!'
-        );
-        m.innerObj.intArray[0].should
-          .satisfy((v) => v >= 0 && v <= 100)
-          .orEmitError('The array elements are percentages, duh!');
-        m.someText.should
-          .match(/^A/)
-          .orEmitError("This needs to start with 'A'.");
-        m.someText.should.notBeEmpty.orEmitError('The string is necessary');
-      }
-    );
     const f2 = createFormGroup(
       {
         someInt: 23,
@@ -83,7 +44,7 @@ export class AppComponent {
           intArray: [45, 123],
         },
       },
-      model
+      dataModel
     );
     this.form = f2;
   }
