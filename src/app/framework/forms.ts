@@ -7,7 +7,7 @@ import {
   ValidatorFn,
 } from '@angular/forms';
 import { Model, Validation, ValidationImpl } from './validation';
-import { isPrimitiveTypeInfo } from './types';
+import { ElementType, isPrimitiveTypeInfo } from './types';
 
 // Reactive forms support
 export type FormControls<T> = T extends {}
@@ -20,15 +20,13 @@ type ControlsInsideGroup<T> = {
   -readonly [Key in keyof T]-?: FormControls<T[Key]>;
 };
 
-type ControlsInsideArray<T> = FormControl<ElementyType<T>>;
+type ControlsInsideArray<T> = FormControl<ElementType<T>>;
 
 type ControlsInside<T> = T extends {}
   ? ControlsInsideGroup<T>
   : T extends Array<infer E>
   ? ControlsInsideArray<T>[]
   : T;
-
-type ElementyType<T> = T extends Array<infer E> ? E : never;
 
 function createAbstractControl<T>(
   value: T,
@@ -133,7 +131,7 @@ export function createFormArray<T>(
     }
   }
   const fieldValidation = arrayModel.validations as ValidationImpl<
-    ElementyType<T>,
+    ElementType<T>,
     T
   >;
   return new FormArray(controls, {

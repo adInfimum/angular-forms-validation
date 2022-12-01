@@ -1,9 +1,24 @@
-import { group } from '@angular/animations';
 import { AsyncValidatorFn, ValidatorFn } from '@angular/forms';
-import { firstValueFrom, map, Observable, of } from 'rxjs';
-import { isPrimitiveTypeInfo, ModelTypeInfo, TypeInfo } from './types';
+import { map, Observable, of } from 'rxjs';
+import {
+  isPrimitiveTypeInfo,
+  ModelTypeInfo,
+  TypeInfo,
+  ElementType,
+  PrimitiveType,
+} from './types';
 
 // Model and validations
+export type ModelValidation<T, G> = T extends boolean
+  ? Validation<boolean, G>
+  : T extends PrimitiveType | string | number
+  ? Validation<T, G>
+  : T extends Array<infer E>
+  ? Array<ModelValidation<E, Array<E>>>
+  : {
+      -readonly [Key in keyof T]-?: ModelValidation<T[Key], T>;
+    };
+
 export class Model<T> {
   constructor(
     public readonly types: ModelTypeInfo<T>,
@@ -19,14 +34,6 @@ export class Model<T> {
     return new Model(accessor(this.types), specAccessor(this.validations));
   }
 }
-
-export type ModelValidation<T, G> = T extends {}
-  ? {
-      -readonly [Key in keyof T]-?: ModelValidation<T[Key], T>;
-    }
-  : T extends Array<infer E>
-  ? Array<ModelValidation<E, Array<E>>>
-  : Validation<T, G>;
 
 export interface Validation<T, G> extends ValidationSpecStart<T> {
   get group(): ValidationSpecStart<G>;
@@ -47,6 +54,7 @@ export class ValidationImpl<T, G> implements Validation<T, G> {
     ) as unknown as ValidationSpec<T>;
   }
 
+  // TODO: this is very simplistic and doesn't handle nested group validation (only the inner-most group can be validated)
   public get group() {
     return {
       should: new ValidationSpecImp<G>(
@@ -113,7 +121,7 @@ type ValidationSpec<T> = T extends number
   ? StringValidationSpec<T>
   : T extends HasLegth
   ? LengthValidationSpec<T>
-  : {};
+  : CommonValidationSpec<T>;
 
 interface ValidationCondition<T> extends ValidationTermination<T> {
   when(condition: ValidCondition<T>): ValidationTermination<T>;
@@ -241,23 +249,10 @@ function createValidations<T>(
   for (const prop of Object.keys(modelTypes)) {
     const field = modelTypes[prop];
     if (isPrimitiveTypeInfo(field)) {
-      switch (field.typeid) {
-        case 'int':
-        case 'float':
-          validations[prop] = new ValidationImpl<number, T>(field);
-          break;
-        case 'string':
-          validations[prop] = new ValidationImpl<string, T>(field);
-          break;
-        case 'boolean':
-          validations[prop] = new ValidationImpl<boolean, T>(field);
-          break;
-      }
+      validations[prop] = new ValidationImpl<T, T>(field);
     } else if (Array.isArray(field)) {
       // Not handling nested (multi-dimensional) arrays. Because arrayField has no validation on its own and arrayField[0].group will always only validation one level up (the inner-most array)
-      validations[prop] = [
-        createValidations({ field: modelTypes[prop][0] }).field,
-      ];
+      validations[prop] = [new ValidationImpl<ElementType<T>, T>(field[0])];
     } else {
       validations[prop] = createValidations(modelTypes[prop]);
     }

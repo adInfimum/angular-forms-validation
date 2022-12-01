@@ -1,6 +1,6 @@
 import { Component, VERSION } from '@angular/core';
 import { createFormGroup, FormControls } from './framework/forms';
-import { Data, dataModel } from './model';
+import { ComplexType, Data, dataModel } from './model';
 import { combineErrorsToObject } from './support';
 
 @Component({
@@ -33,10 +33,30 @@ export class AppComponent {
     // let value: FormValue<typeof f>;
     // value = f.value;
 
+    const d: Date = new Date('1995-12-17T03:24:00');
+    const d2 = new Date(Date.now());
+
+    const c: ComplexType = { selfLink: 'fdasf', offset: 10 };
+
+    const defValue: Data = {
+      someInt: 23,
+      someText: 'tty',
+      opaqueType: c,
+      //someDate: d2,
+      innerObj: {
+        embedded: {
+          anotherInt: 777,
+        },
+        intArray: [45, 123],
+      },
+    };
+
     const f2 = createFormGroup(
       {
         someInt: 23,
         someText: 'tty',
+        opaqueType: c,
+        //someDate: d,
         innerObj: {
           embedded: {
             anotherInt: 777,
