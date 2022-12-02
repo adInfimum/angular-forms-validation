@@ -6,19 +6,22 @@ import {
 
 //combine errors
 export function combineErrorsToObject(
-  control: AbstractControl | UntypedFormGroup,
-  propName?: string
+  control: AbstractControl | UntypedFormGroup
 ): ValidationErrors {
   return Object.assign(
-    thisControlErrors(control, propName),
+    thisControlErrors(control),
     isFormGroup(control) ? childErrors(control) : {}
   );
 }
 
 function childErrors(group: UntypedFormGroup): ValidationErrors {
-  return Object.keys(group.controls)
-    .map((name) => combineErrorsToObject(group.controls[name], name))
+  const errors = Object.keys(group.controls)
+    .map((name) => {
+      const e = combineErrorsToObject(group.controls[name]);
+      return emptyErrors(e) ? {} : { [name]: e };
+    })
     .reduce((all, err) => Object.assign(all, err), {});
+  return errors;
 }
 
 function isFormGroup(
@@ -27,14 +30,8 @@ function isFormGroup(
   return !!(control as UntypedFormGroup).controls;
 }
 
-function thisControlErrors(
-  control: AbstractControl,
-  propName?: string
-): ValidationErrors {
-  if (emptyErrors(control.errors)) return {};
-  return propName
-    ? { [propName]: { ...control.errors } }
-    : { ...control.errors };
+function thisControlErrors(control: AbstractControl): ValidationErrors {
+  return emptyErrors(control.errors) ? {} : { ...control.errors };
 }
 
 function emptyErrors(errors: ValidationErrors | null): errors is null {

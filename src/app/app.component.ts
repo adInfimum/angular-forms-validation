@@ -1,6 +1,7 @@
 import { Component, VERSION } from '@angular/core';
 import { createFormGroup, FormControls } from './framework/forms';
-import { ComplexType, Data, dataModel } from './model';
+import { ModelTypeInfo } from './framework/types';
+import { ComplexObject, ComplexType, Data, dataModel } from './model';
 import { combineErrorsToObject } from './support';
 
 @Component({
@@ -35,6 +36,7 @@ export class AppComponent {
 
     const d: Date = new Date('1995-12-17T03:24:00');
     const d2 = new Date(Date.now());
+    d2.getDay();
 
     const c: ComplexType = { selfLink: 'fdasf', offset: 10 };
 
@@ -42,8 +44,10 @@ export class AppComponent {
       someInt: 23,
       someText: 'tty',
       opaqueType: c,
+      someClass: new ComplexObject('fadsf', { selfLink: 'jjl', offset: 123 }),
       //someDate: d2,
       innerObj: {
+        hasEmbedded: true,
         embedded: {
           anotherInt: 777,
         },
@@ -56,11 +60,13 @@ export class AppComponent {
         someInt: 23,
         someText: 'tty',
         opaqueType: c,
+        someClass: new ComplexObject('fadsf', { selfLink: 'jjl', offset: 123 }),
         //someDate: d,
         innerObj: {
-          embedded: {
-            anotherInt: 777,
-          },
+          hasEmbedded: true,
+          // embedded: {
+          //   anotherInt: 777,
+          // },
           intArray: [45, 123],
         },
       },
@@ -68,4 +74,15 @@ export class AppComponent {
     );
     this.form = f2;
   }
+
+  public get formValue() {
+    return JSON.stringify(this.form.value);
+  }
+}
+
+type AccessFn<T> = (obj: T) => T[keyof T];
+
+function propName<T>(accessFn: AccessFn<T>): string;
+function propName(accessFn: Function): string {
+  return accessFn.toString().match(/\.([a-zA-Z0-9]+)/)![1];
 }

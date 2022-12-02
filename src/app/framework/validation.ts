@@ -158,14 +158,14 @@ class ValidationSpecImp<T>
     return this;
   }
 
-  public get notBeEmpty() {
+  get notBeEmpty() {
     return this.combine(function (v) {
       return !!v;
     });
   }
 
   // Should be on a sub-object so it can't be invoked at the start
-  public when(condition: ValidCondition<T>) {
+  when(condition: ValidCondition<T>) {
     // I think we don't want an arrow function, we don't want to capture `this`
     const existingValidator = this.currentValidator;
     this.currentValidator = function (v) {
@@ -174,22 +174,22 @@ class ValidationSpecImp<T>
     return this;
   }
 
-  public match(regex: RegExp) {
+  match(regex: RegExp) {
     return this.combine(function (v) {
       return !v || !!v.toString().match(regex);
     });
   }
 
-  public satisfy(condition: ValidCondition<T>) {
+  satisfy(condition: ValidCondition<T>) {
     return this.combine(condition);
   }
 
-  public satisfyAsync(condition: AsyncValidCondition<T>) {
+  satisfyAsync(condition: AsyncValidCondition<T>) {
     this.currentAsyncValidator = condition;
     return this;
   }
 
-  public get beInteger() {
+  get beInteger() {
     return this.combine(function (v) {
       return (
         !v ||
@@ -201,13 +201,13 @@ class ValidationSpecImp<T>
     });
   }
 
-  public get beFloat() {
+  get beFloat() {
     return this.combine(function (v) {
       return !v || !isNaN(v as unknown as number);
     });
   }
 
-  public beLongerThan(l: number) {
+  beLongerThan(l: number) {
     return this.combine(function (v) {
       return (v as unknown as HasLegth)?.length > l;
     });
@@ -225,11 +225,12 @@ class ValidationSpecImp<T>
     });
   }
 
-  public orEmitError(message: string) {
+  orEmitError(message: string) {
     if (this.currentValidator) {
       const existingValidator = this.currentValidator;
       this.complete(function (c) {
-        return existingValidator(c.value) ? null : { error: message };
+        const ret = existingValidator(c.value) ? null : { error: message };
+        return ret;
       });
     } else if (this.currentAsyncValidator) {
       const existingValidator = this.currentAsyncValidator;

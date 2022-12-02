@@ -81,6 +81,10 @@ export function createFormControl<T>(
   });
 }
 
+function propValue<T>(value: T, prop: string) {
+  return !!value ? value[prop] : undefined;
+}
+
 export function createFormGroup<T>(
   value: T,
   model: Model<T>,
@@ -91,25 +95,14 @@ export function createFormGroup<T>(
   const groupValidators = [];
   const asyncGroupValidators = [];
   for (const prop of Object.keys(model.types)) {
-    const field = model.types[prop];
-    if (isPrimitiveTypeInfo(field)) {
-      controls[prop] = createFormControl(
-        value[prop],
-        model.subModel((m) => m[prop]),
-        groupValidators,
-        asyncGroupValidators
-      );
-    } else if (Array.isArray(field)) {
-      controls[prop] = createFormArray(
-        value[prop],
-        model.subModel((m) => m[prop])
-      );
-    } else {
-      controls[prop] = createFormGroup(
-        value[prop],
-        model.subModel((m) => m[prop])
-      );
-    }
+    const primitive = isPrimitiveTypeInfo(model.types[prop]);
+    const v = propValue(value, prop);
+    controls[prop] = createAbstractControl(
+      propValue(value, prop),
+      model.subModel((m) => m[prop]),
+      primitive ? groupValidators : undefined,
+      primitive ? asyncGroupValidators : undefined
+    );
   }
   return new FormGroup<ControlsInsideGroup<T>>(
     controls as ControlsInsideGroup<T>,
