@@ -6,7 +6,12 @@ import {
   FormGroup,
   ValidatorFn,
 } from '@angular/forms';
-import { Model, Validation, ValidationImpl } from './validation';
+import {
+  Model,
+  Validation,
+  ValidationImpl,
+  ValidCondition,
+} from './validation';
 import { ElementType, isPrimitiveTypeInfo } from './types';
 
 // Reactive forms support
@@ -30,100 +35,81 @@ type ControlsInside<T> = T extends {}
 
 function createAbstractControl<T>(
   value: T,
-  model: Model<T>,
-  groupValidators?: ValidatorFn[],
-  asyncGroupValidators?: AsyncValidatorFn[]
+  model: Model<T>
 ): AbstractControl<ControlsInside<T>> {
   if (isPrimitiveTypeInfo(model.types)) {
     return createFormControl<T>(
       value,
-      model,
-      groupValidators,
-      asyncGroupValidators
+      model
     ) as AbstractControl<T> as AbstractControl<ControlsInside<T>>;
   } else if (Array.isArray(model.types)) {
     return createFormArray(
-      value,
-      model,
-      groupValidators,
-      asyncGroupValidators
+      value as unknown as ArrayType<T>,
+      model as unknown as Model<ArrayType<T>>
     ) as AbstractControl<ControlsInsideArray<T>[]> as AbstractControl<
       ControlsInside<T>
     >;
   } else {
-    return createFormGroup(
-      value,
-      model,
-      groupValidators,
-      asyncGroupValidators
-    ) as AbstractControl<ControlsInsideGroup<T>> as AbstractControl<
-      ControlsInside<T>
-    >;
+    return createFormGroup(value, model) as AbstractControl<
+      ControlsInsideGroup<T>
+    > as AbstractControl<ControlsInside<T>>;
   }
 }
 
 export function createFormControl<T>(
   value: T,
-  model: Model<T>,
-  groupValidators?: ValidatorFn[],
-  asyncGroupValidators?: AsyncValidatorFn[]
+  model: Model<T>
 ): FormControl<T> {
   const fieldValidation = model.validations as unknown as ValidationImpl<T, T>;
-  if (Array.isArray(groupValidators)) {
-    groupValidators.push(...fieldValidation.groupValidators);
-  }
-  if (Array.isArray(asyncGroupValidators)) {
-    asyncGroupValidators.push(...fieldValidation.asyncGroupValidators);
-  }
   return new FormControl<T>(value, {
     validators: fieldValidation.validators,
     asyncValidators: fieldValidation.asyncValidators,
   });
 }
 
-function propValue<T>(value: T, prop: string) {
+type GroupType<T> = {
+  [Key in keyof T]: T[Key];
+};
+
+type ArrayType<T> = ElementType<T>[];
+
+function propValue<T>(value: GroupType<T>, prop: keyof T): T[keyof T] {
   return !!value ? value[prop] : undefined;
 }
 
-export function createFormGroup<T>(
+export function createFormGroup<T extends GroupType<T>>(
   value: T,
-  model: Model<T>,
-  externalGroupValidators?: ValidatorFn[],
-  externalAsyncGroupValidators?: AsyncValidatorFn[]
+  model: Model<T>
 ): FormGroup<ControlsInsideGroup<T>> {
-  const controls = {};
-  const groupValidators = [];
-  const asyncGroupValidators = [];
-  for (const prop of Object.keys(model.types)) {
-    const primitive = isPrimitiveTypeInfo(model.types[prop]);
+  const controls: Partial<ControlsInsideGroup<T>> = {};
+  for (const p of Object.keys(model.types)) {
+    const prop = p as keyof T;
     const v = propValue(value, prop);
     controls[prop] = createAbstractControl(
       propValue(value, prop),
-      model.subModel((m) => m[prop]),
-      primitive ? groupValidators : undefined,
-      primitive ? asyncGroupValidators : undefined
-    );
+      model.subModel((m) => m[prop])
+    ) as FormControls<T[keyof T]>;
+    // TODO: add group validations back
   }
   return new FormGroup<ControlsInsideGroup<T>>(
-    controls as ControlsInsideGroup<T>,
-    { validators: groupValidators, asyncValidators: asyncGroupValidators }
+    controls as ControlsInsideGroup<T>
   );
 }
 
-export function createFormArray<T>(
+export function createFormArray<T extends ArrayType<T>>(
   value: T,
-  model: Model<T>,
-  externalGroupValidators?: ValidatorFn[],
-  externalAsyncGroupValidators?: AsyncValidatorFn[]
+  model: Model<ArrayType<T>>
 ): FormArray<ControlsInsideArray<T>> {
   const arrayModel = model.subModel((m) => m[0]);
-  const controls = [];
+  const controls: ControlsInsideArray<T>[] = [];
   if (Array.isArray(value)) {
     for (const e of value) {
-      controls.push(createAbstractControl(e, arrayModel));
+      controls.push(
+        createAbstractControl(e, arrayModel) as ControlsInsideArray<T>
+      );
     }
   }
-  const fieldValidation = arrayModel.validations as ValidationImpl<
+  const fieldValidation = arrayModel.validations as unknown as ValidationImpl<
     ElementType<T>,
     T
   >;

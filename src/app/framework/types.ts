@@ -19,10 +19,14 @@ export type ModelTypeInfo<T> = T extends boolean
   : T extends PrimitiveType | string | number // Needs to list all other primitive TS types. I'm not handling tuples
   ? TypeInfo<T>
   : T extends Array<infer E>
-  ? Array<ModelTypeInfo<E>>
-  : {
-      -readonly [Key in keyof T]-?: ModelTypeInfo<T[Key]>;
-    };
+  ? ArrayModelTypeInfo<E>
+  : GroupModelTypeInfo<T>;
+
+export type GroupModelTypeInfo<T> = {
+  -readonly [Key in keyof T]-?: ModelTypeInfo<T[Key]>;
+};
+
+export type ArrayModelTypeInfo<E> = Array<ModelTypeInfo<E>>;
 
 export class Types {
   public static get int() {

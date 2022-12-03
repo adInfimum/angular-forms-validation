@@ -6,6 +6,7 @@ import {
   TypeInfo,
   ElementType,
   PrimitiveType,
+  GroupModelTypeInfo,
 } from './types';
 
 // Model and validations
@@ -25,13 +26,14 @@ export class Model<T> {
     public readonly validations: ModelValidation<T, T>
   ) {}
 
-  public subModel<E>(
-    accessor: (m: ModelTypeInfo<T>) => ModelTypeInfo<E>
-  ): Model<E> {
+  public subModel<E>(accessor: (m: T) => E): Model<E> {
+    const typeAccessor = accessor as unknown as (
+      m: ModelTypeInfo<T>
+    ) => ModelTypeInfo<E>;
     const specAccessor = accessor as unknown as (
       m: ModelValidation<T, T>
     ) => ModelValidation<E, E>;
-    return new Model(accessor(this.types), specAccessor(this.validations));
+    return new Model(typeAccessor(this.types), specAccessor(this.validations));
   }
 }
 
@@ -44,8 +46,13 @@ export class ValidationImpl<T, G> implements Validation<T, G> {
   asyncValidators: AsyncValidatorFn[] = [];
   groupValidators: ValidatorFn[] = [];
   asyncGroupValidators: AsyncValidatorFn[] = [];
+  disabledCondition: ValidCondition<G>;
 
   constructor(readonly typeInfo: TypeInfo<T>) {}
+
+  public disabledWhen(condition: ValidCondition<G>) {
+    this.disabledCondition = condition;
+  }
 
   public get should() {
     return new ValidationSpecImp<T>(
@@ -65,7 +72,7 @@ export class ValidationImpl<T, G> implements Validation<T, G> {
   }
 }
 
-type ValidCondition<T> = (value: T) => boolean;
+export type ValidCondition<T> = (value: T) => boolean;
 type AsyncValidCondition<T> = (
   value: T
 ) => Promise<boolean> | Observable<boolean>;
@@ -243,29 +250,42 @@ class ValidationSpecImp<T>
   }
 }
 
-function createValidations<T>(
-  modelTypes: ModelTypeInfo<T>
-): ModelValidation<T, T> {
-  const validations = {};
-  for (const prop of Object.keys(modelTypes)) {
+function createValidations<T, G = T>(
+  modelTypes: GroupModelTypeInfo<T>
+): ModelValidation<T, G> {
+  type P = T[keyof T];
+  const validations: {
+    [Key in keyof T]?:
+      | Validation<P, T>
+      | Array<Validation<ElementType<P>, Array<ElementType<P>>>>
+      | ModelValidation<P, T>;
+  } = {};
+  for (const p of Object.keys(modelTypes)) {
+    const prop = p as keyof T;
     const field = modelTypes[prop];
     if (isPrimitiveTypeInfo(field)) {
-      validations[prop] = new ValidationImpl<T, T>(field);
+      validations[prop] = new ValidationImpl(field as TypeInfo<P>);
     } else if (Array.isArray(field)) {
       // Not handling nested (multi-dimensional) arrays. Because arrayField has no validation on its own and arrayField[0].group will always only validation one level up (the inner-most array)
-      validations[prop] = [new ValidationImpl<ElementType<T>, T>(field[0])];
+      validations[prop] = [
+        new ValidationImpl<ElementType<P>, Array<ElementType<P>>>(
+          (field as Array<TypeInfo<ElementType<P>>>)[0]
+        ),
+      ];
     } else {
-      validations[prop] = createValidations(modelTypes[prop]);
+      validations[prop] = createValidations<P, T>(
+        modelTypes[prop] as GroupModelTypeInfo<T[keyof T]>
+      );
     }
   }
-  return validations as ModelValidation<T, T>;
+  return validations as ModelValidation<T, G>;
 }
 
 export function modelValidation<T>(
   types: ModelTypeInfo<T>,
   validations: (model: ModelValidation<T, T>) => void
 ): Model<T> {
-  const validationSupport = createValidations(types);
+  const validationSupport = createValidations(types as GroupModelTypeInfo<T>);
   validations(validationSupport);
   return new Model<T>(types, validationSupport);
 }

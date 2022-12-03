@@ -73,6 +73,8 @@ export class AppComponent {
       dataModel
     );
     this.form = f2;
+
+    //const v: Data = this.form.value;
   }
 
   public get formValue() {
