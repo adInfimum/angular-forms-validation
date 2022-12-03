@@ -6,13 +6,15 @@ import {
   FormGroup,
   ValidatorFn,
 } from '@angular/forms';
+import { ArrayModelTypeInfo, ElementType, isPrimitiveTypeInfo } from './types';
 import {
-  Model,
-  Validation,
-  ValidationImpl,
-  ValidCondition,
+  ArraySpec,
+  group,
+  GroupSpec,
+  ModelSpec,
+  Spec,
+  SpecImpl,
 } from './validation';
-import { ElementType, isPrimitiveTypeInfo } from './types';
 
 // Reactive forms support
 export type FormControls<T> = T extends {}
@@ -35,35 +37,35 @@ type ControlsInside<T> = T extends {}
 
 function createAbstractControl<T>(
   value: T,
-  model: Model<T>
+  model: Spec<T>
 ): AbstractControl<ControlsInside<T>> {
-  if (isPrimitiveTypeInfo(model.types)) {
+  if (isPrimitiveTypeInfo(model.type)) {
     return createFormControl<T>(
       value,
       model
     ) as AbstractControl<T> as AbstractControl<ControlsInside<T>>;
-  } else if (Array.isArray(model.types)) {
+  } else if ((model as unknown as ArraySpec<ElementType<T>>).element) {
     return createFormArray(
       value as unknown as ArrayType<T>,
-      model as unknown as Model<ArrayType<T>>
+      model as unknown as ArraySpec<ElementType<T>>
     ) as AbstractControl<ControlsInsideArray<T>[]> as AbstractControl<
       ControlsInside<T>
     >;
   } else {
-    return createFormGroup(value, model) as AbstractControl<
-      ControlsInsideGroup<T>
-    > as AbstractControl<ControlsInside<T>>;
+    return createFormGroup(
+      value,
+      model as unknown as GroupSpec<T>
+    ) as AbstractControl<ControlsInsideGroup<T>> as AbstractControl<
+      ControlsInside<T>
+    >;
   }
 }
 
-export function createFormControl<T>(
-  value: T,
-  model: Model<T>
-): FormControl<T> {
-  const fieldValidation = model.validations as unknown as ValidationImpl<T, T>;
+export function createFormControl<T>(value: T, model: Spec<T>): FormControl<T> {
+  const spec = model as SpecImpl<T>;
   return new FormControl<T>(value, {
-    validators: fieldValidation.validators,
-    asyncValidators: fieldValidation.asyncValidators,
+    validators: spec.getValidators(),
+    asyncValidators: spec.getAsyncValidators(),
   });
 }
 
@@ -79,42 +81,42 @@ function propValue<T>(value: GroupType<T>, prop: keyof T): T[keyof T] {
 
 export function createFormGroup<T extends GroupType<T>>(
   value: T,
-  model: Model<T>
+  model: GroupSpec<T>
 ): FormGroup<ControlsInsideGroup<T>> {
   const controls: Partial<ControlsInsideGroup<T>> = {};
-  for (const p of Object.keys(model.types)) {
+  for (const p of Object.keys(model)) {
     const prop = p as keyof T;
-    const v = propValue(value, prop);
     controls[prop] = createAbstractControl(
       propValue(value, prop),
-      model.subModel((m) => m[prop])
+      model[prop] as Spec<T[keyof T]>
     ) as FormControls<T[keyof T]>;
     // TODO: add group validations back
   }
+  const spec = group(model) as SpecImpl<T>;
   return new FormGroup<ControlsInsideGroup<T>>(
-    controls as ControlsInsideGroup<T>
+    controls as ControlsInsideGroup<T>,
+    {
+      validators: spec.getValidators(),
+      asyncValidators: spec.getAsyncValidators(),
+    }
   );
 }
 
 export function createFormArray<T extends ArrayType<T>>(
   value: T,
-  model: Model<ArrayType<T>>
+  model: ArraySpec<ElementType<T>>
 ): FormArray<ControlsInsideArray<T>> {
-  const arrayModel = model.subModel((m) => m[0]);
   const controls: ControlsInsideArray<T>[] = [];
   if (Array.isArray(value)) {
     for (const e of value) {
       controls.push(
-        createAbstractControl(e, arrayModel) as ControlsInsideArray<T>
+        createAbstractControl(e, model.element) as ControlsInsideArray<T>
       );
     }
   }
-  const fieldValidation = arrayModel.validations as unknown as ValidationImpl<
-    ElementType<T>,
-    T
-  >;
+  const spec = model as unknown as SpecImpl<T>;
   return new FormArray(controls, {
-    validators: fieldValidation.groupValidators,
-    asyncValidators: fieldValidation.asyncGroupValidators,
+    validators: spec.getValidators(),
+    asyncValidators: spec.getAsyncValidators(),
   });
 }

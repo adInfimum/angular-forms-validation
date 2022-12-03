@@ -5,7 +5,7 @@ export class TypeInfo<T> {
 }
 
 export function isPrimitiveTypeInfo(x: any, v?: any): x is TypeInfo<any> {
-  return !!x.typeid;
+  return !!x && !!x.typeid;
 }
 
 // Special tag to make complex data types opaque
@@ -29,18 +29,10 @@ export type GroupModelTypeInfo<T> = {
 export type ArrayModelTypeInfo<E> = Array<ModelTypeInfo<E>>;
 
 export class Types {
-  public static get int() {
-    return new TypeInfo<number>('int');
-  }
-  public static get float() {
-    return new TypeInfo<number>('float');
-  }
-  public static get string() {
-    return new TypeInfo<string>('string');
-  }
-  public static get boolean() {
-    return new TypeInfo<boolean>('boolean');
-  }
+  public static int = new TypeInfo<number>('int');
+  public static float = new TypeInfo<number>('float');
+  public static string = new TypeInfo<string>('string');
+  public static boolean = new TypeInfo<boolean>('boolean');
   // For a complex type handled by a single atomic FormControl
   public static opaque<T>(typeid: string) {
     return new TypeInfo<T>(typeid);

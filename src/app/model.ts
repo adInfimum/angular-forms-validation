@@ -1,7 +1,7 @@
 import { interval } from 'rxjs';
 import { first, map } from 'rxjs/operators';
 import { ModelTypeInfo, PrimitiveType, Types } from './framework/types';
-import { modelValidation } from './framework/validation';
+import { group, modelValidation } from './framework/validation';
 
 // Suport Date as a first-class value in forms
 //declare interface Date extends PrimitiveType {}
@@ -53,33 +53,35 @@ export const dataModel = modelValidation<Data>(
     },
   },
   (m) => {
-    m.someInt.should.beInteger.notBeEmpty.orEmitError(
+    m.someInt.should(
+      (x) =>
+        x &&
+        x.toString().length > 0 &&
+        !isNaN(x) &&
+        parseInt(x.toString(), 10) == parseFloat(x.toString()),
       'The int field is a must!'
     );
-    m.someInt.should
-      .satisfyAsync((v) =>
+    m.someInt.shouldAsync(
+      (v) =>
         interval(500).pipe(
           first(),
           map(() => v > 100)
-        )
-      )
-      .orEmitError('Async validation failed');
-    m.opaqueType.should.notBeEmpty.orEmitError(
-      'Has to have this silly complex value too'
+        ),
+      'Async validation failed'
     );
-    m.innerObj.hasEmbedded.group.should
-      .satisfy(
-        (innerObj) =>
-          !innerObj.hasEmbedded ||
-          (!!innerObj.embedded && innerObj.embedded.anotherInt > 0)
-      )
-      .orEmitError(
-        'If hasEmbedded is true, there needs to be an embedded object!'
-      );
-    m.innerObj.intArray[0].should
-      .satisfy((v) => v >= 0 && v <= 100)
-      .orEmitError('The array elements are percentages, duh!');
-    m.someText.should.match(/^A/).orEmitError("This needs to start with 'A'.");
-    m.someText.should.notBeEmpty.orEmitError('The string is necessary');
+    m.opaqueType.should((x) => !!x, 'Has to have this silly complex value too');
+    //group(m.innerObj.hasEmbedded); // This is an error since it's not a GroupSpec<T>
+    group(m.innerObj).should(
+      (innerObj) =>
+        !innerObj.hasEmbedded ||
+        (!!innerObj.embedded && innerObj.embedded.anotherInt > 0),
+      'If hasEmbedded is true, there needs to be an embedded object!'
+    );
+    m.innerObj.intArray.element.should(
+      (v) => v >= 0 && v <= 100,
+      'The array elements are percentages, duh!'
+    );
+    m.someText.should((x) => !!x.match(/^A/), "This needs to start with 'A'.");
+    m.someText.should((x) => !!x, 'The string is necessary');
   }
 );
