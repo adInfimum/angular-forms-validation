@@ -1,8 +1,27 @@
-import { Component, VERSION } from '@angular/core';
-import { createFormGroup, FormControls } from './framework/forms';
+import { Component, Pipe, PipeTransform, VERSION } from '@angular/core';
+import { AbstractControl } from '@angular/forms';
+import {
+  createFormGroup,
+  EnchancedControl,
+  FormControls,
+} from './framework/forms';
 import { ModelTypeInfo } from './framework/types';
 import { ComplexObject, ComplexType, Data, dataModel } from './model';
 import { combineErrorsToObject } from './support';
+
+@Pipe({ name: 'isVisible' })
+export class VisiblePipe implements PipeTransform {
+  transform(control: AbstractControl<unknown>): boolean {
+    return !(control as EnchancedControl).isHidden;
+  }
+}
+
+@Pipe({ name: 'disableTooltip' })
+export class TooltipPipe implements PipeTransform {
+  transform(control: AbstractControl<unknown>): string {
+    return (control as EnchancedControl).disabledTooltip || '';
+  }
+}
 
 @Component({
   selector: 'my-app',
@@ -16,6 +35,10 @@ export class AppComponent {
 
   public allErrors() {
     return JSON.stringify(combineErrorsToObject(this.form), null, 2);
+  }
+
+  public isVisible(control: AbstractControl<unknown>) {
+    return !(control as EnchancedControl).isHidden;
   }
 
   constructor() {

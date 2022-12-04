@@ -12,7 +12,10 @@
       another int: <input formControlName="anotherInt" /><br />
     </div>
     Array: <br />
-    <div formArrayName="intArray">
+    <div
+      formArrayName="intArray"
+      *ngIf="isVisible(form.controls.innerObj.controls.intArray)"
+    >
       <div
         *ngFor="
           let value of form.controls.innerObj.controls.intArray.controls;
@@ -25,6 +28,7 @@
   </div>
 </form>
 
+<p>Array visible: {{ form.controls.innerObj.controls.intArray | isVisible }}</p>
 <p>Form status: {{ form.status }}</p>
 <div>
   Form value:

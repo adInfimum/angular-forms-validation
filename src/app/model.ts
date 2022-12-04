@@ -86,6 +86,7 @@ export const dataModel = ceateModel<Data>(
       (v) => v >= 0 && v <= 100,
       'The array elements are percentages, duh!'
     );
+    m.innerObj.intArray.hideIf(m.innerObj, (v) => v.hasEmbedded);
     m.someText.should((x) => !!x.match(/^A/), "This needs to start with 'A'.");
     m.someText.should((x) => !!x, 'The string is necessary');
   }

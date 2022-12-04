@@ -1,3 +1,4 @@
+import { Pipe } from '@angular/core';
 import {
   AbstractControl,
   FormArray,
@@ -6,7 +7,6 @@ import {
 } from '@angular/forms';
 import { Observable, takeUntil } from 'rxjs';
 import {
-  ArrayModelTypeInfo,
   ArrayType,
   ElementType,
   GroupType,
@@ -14,14 +14,20 @@ import {
 } from './types';
 import {
   ArraySpec,
+  CondFn,
   group,
   GroupSpec,
-  ModelSpec,
   Spec,
   SpecImpl,
+  SpecMap,
 } from './validation';
 
 // Reactive forms support
+export interface EnchancedControl {
+  disabledTooltip?: string;
+  isHidden?: boolean;
+}
+
 export type DestroyObservable = Observable<unknown>;
 
 export type FormControls<T> = T extends {}
@@ -172,11 +178,17 @@ function getParentScope(
   controlToDisable: AbstractControl<unknown>,
   scopeControls: Set<AbstractControl<unknown>>
 ): AbstractControl<unknown> {
+  if (scopeControls.size === 1) {
+    // If there's only one scope, don't bother looking it up.
+    scopeControls.values().next().value;
+  }
+  // If there's more (were in an array) go up the parent chain to get the related parent scope
   let c = controlToDisable;
   while (c) {
     if (scopeControls.has(c)) return c;
     c = c.parent;
   }
+  // Give up, assert error or do a sophisticated lookup into the most related control :)
   return null;
 }
 
@@ -189,37 +201,96 @@ function valueChanges<T>(
     : (control as AbstractControl<T>).valueChanges;
 }
 
+function setDisabled<T>(
+  control: AbstractControl<T>,
+  disabledTooltips: string[]
+) {
+  const disable = disabledTooltips.length > 0;
+  if (disable) {
+    (control as EnchancedControl).disabledTooltip = disabledTooltips.reduce(
+      (p, t) => p || t
+    );
+    control.disable({ emitEvent: false });
+  } else {
+    (control as EnchancedControl).disabledTooltip = '';
+    control.enable({ emitEvent: false });
+  }
+}
+
+function hookUpHandler<T>(
+  spec: SpecImpl<T>,
+  controlMap: ControlMap,
+  specMap: SpecMap,
+  handler: (
+    control: AbstractControl<T>,
+    value: T,
+    conditions: [CondFn<T>, string?][]
+  ) => void,
+  destroy?: DestroyObservable
+) {
+  const controlsToHandle = getControls(spec, controlMap);
+  for (const scope of specMap.keys()) {
+    const scopeControls = controlMap.get(scope);
+    const conditions = specMap.get(scope);
+    for (const toHandle of controlsToHandle) {
+      const theScope = getParentScope(toHandle, scopeControls);
+      if (!theScope) continue;
+      console.log(
+        `Hooking up handler to ${JSON.stringify(
+          theScope.value
+        )} control valueChanges`
+      );
+      valueChanges<T>(theScope, destroy).subscribe(function (value) {
+        handler(toHandle, value, conditions as [CondFn<T>, string?][]);
+      });
+    }
+  }
+}
+
 function hookUpDisable<T>(
   spec: SpecImpl<T>,
   controlMap: ControlMap,
   destroy?: DestroyObservable
 ) {
-  const controlsToDisable = getControls(spec, controlMap);
-  const disablersMap = spec.getDisablersMap();
-  for (const scope of disablersMap.keys()) {
-    const scopeControls = controlMap.get(scope);
-    const disablers = disablersMap.get(scope);
-    for (const toDisable of controlsToDisable) {
-      const theScope = getParentScope(toDisable, scopeControls);
-      if (!theScope) continue;
-      console.log(`Hooking up disables to ${theScope.value} control`);
-      valueChanges<T>(theScope).subscribe(function (value) {
-        console.log(
-          `Running value changes on ${value} to possibly disable ${theScope.value} control`
-        );
-        const disable = disablers
-          .map(function (d) {
-            return d[0](value);
-          })
-          .reduce((p, c) => p || c, false);
-        if (disable) {
-          toDisable.disable({ emitEvent: false });
-        } else {
-          toDisable.enable({ emitEvent: false });
-        }
-      });
-    }
-  }
+  hookUpHandler(
+    spec,
+    controlMap,
+    spec.getDisablersMap(),
+    function (control, value, disablers) {
+      console.log(
+        `Running value changes on ${value} to possibly disable the ${control.value} control`
+      );
+      const disableState = disablers
+        .filter(function (d) {
+          return d[0](value);
+        })
+        .map(function (d) {
+          return d[1];
+        });
+      setDisabled(control, disableState);
+    },
+    destroy
+  );
+}
+
+function hookUpHide<T>(
+  spec: SpecImpl<T>,
+  controlMap: ControlMap,
+  destroy?: DestroyObservable
+) {
+  hookUpHandler(
+    spec,
+    controlMap,
+    spec.getHidersMap(),
+    function (control, value, hiders) {
+      console.log(
+        `Running value changes on ${value} to possibly hide the ${control.value} control`
+      );
+      const isHidden = hiders.map((h) => h[0](value)).reduce((p, c) => p || c);
+      (control as EnchancedControl).isHidden = isHidden;
+    },
+    destroy
+  );
 }
 
 function hookUpControls<T>(
@@ -231,6 +302,7 @@ function hookUpControls<T>(
     `Hooking up observables for ${JSON.stringify(spec?.type)} controls`
   );
   hookUpDisable(spec as SpecImpl<T>, controlMap, destroy);
+  hookUpHide(spec as SpecImpl<T>, controlMap, destroy);
 }
 
 function hookUpObservables<T>(

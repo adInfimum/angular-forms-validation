@@ -42,14 +42,17 @@ export function group<T>(spec: GroupSpec<T>): Spec<T> {
   return (spec as GroupSpecImpl<T>)['__group_model_spec_do_not_access'];
 }
 
-type ValidFn<T> = (value: T, index?: number) => boolean | ValidationErrors;
-type AsyncValidFn<T> = (
+export type ValidFn<T> = (
+  value: T,
+  index?: number
+) => boolean | ValidationErrors;
+export type AsyncValidFn<T> = (
   value: T,
   index?: number
 ) =>
   | Promise<boolean | ValidationErrors>
   | Observable<boolean | ValidationErrors>;
-type CondFn<T> = (value: T, index?: number) => boolean;
+export type CondFn<T> = (value: T, index?: number) => boolean;
 
 export class Spec<T> {
   constructor(public type: ModelTypeInfo<T>) {}
@@ -92,7 +95,7 @@ export class Spec<T> {
   }
 }
 
-type SpecMap = Map<Spec<unknown>, [CondFn<unknown>, string?][]>;
+export type SpecMap = Map<Spec<unknown>, [CondFn<unknown>, string?][]>;
 
 export class SpecImpl<T> extends Spec<T> {
   constructor(type: ModelTypeInfo<T>) {
@@ -109,6 +112,20 @@ export class SpecImpl<T> extends Spec<T> {
         .filter((d) => d[0] === spec)
         .map((d) => [d[1] as CondFn<T>, d[2]]);
       map.set(spec, specDisablers as [CondFn<T>, string?][]);
+    }
+    return map;
+  }
+
+  getHidersMap() {
+    const map: SpecMap = new Map();
+    for (const hider of this.hiders) {
+      map.set(hider[0], null);
+    }
+    for (const spec of map.keys()) {
+      const specHiders = this.hiders
+        .filter((h) => h[0] === spec)
+        .map((h) => [h[1] as CondFn<T>]);
+      map.set(spec, specHiders as [CondFn<T>, string?][]);
     }
     return map;
   }
