@@ -2,10 +2,35 @@
 <p>Start editing to see some magic happen :)</p>
 
 <form [formGroup]="form">
-  <input formControlName="someInt" />
-  <input formControlName="someText" />
+  int: <input formControlName="someInt" /><br />
+  text: <input formControlName="someText" /><br />
+  opaque type: <input formControlName="opaqueType" /><br />
+  opaque clas: <input formControlName="someClass" /><br />
+  <div formGroupName="innerObj" style="padding-left:1em">
+    has embedded: <input type="checkbox" formControlName="hasEmbedded" /><br />
+    <div formGroupName="embedded">
+      another int: <input formControlName="anotherInt" /><br />
+    </div>
+    Array: <br />
+    <div formArrayName="intArray">
+      <div
+        *ngFor="
+          let value of form.controls.innerObj.controls.intArray.controls;
+          index as i
+        "
+      >
+        <input [formControlName]="i" /><br />
+      </div>
+    </div>
+  </div>
 </form>
 
 <p>Form status: {{ form.status }}</p>
-<p>Form value: {{ formValue }}</p>
-<p>Form errors: {{ allErrors() }}</p>
+<div>
+  Form value:
+  <pre>{{ formValue }}</pre>
+</div>
+<div>
+  Form errors:
+  <pre>{{ allErrors() }}</pre>
+</div>

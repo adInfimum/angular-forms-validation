@@ -15,7 +15,7 @@ export class AppComponent {
   form: FormControls<Data>;
 
   public allErrors() {
-    return JSON.stringify(combineErrorsToObject(this.form));
+    return JSON.stringify(combineErrorsToObject(this.form), null, 2);
   }
 
   constructor() {
@@ -78,7 +78,7 @@ export class AppComponent {
   }
 
   public get formValue() {
-    return JSON.stringify(this.form.value);
+    return JSON.stringify(this.form.value, null, 2);
   }
 }
 
