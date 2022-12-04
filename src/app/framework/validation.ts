@@ -8,10 +8,8 @@ import { from, map, Observable } from 'rxjs';
 import {
   isPrimitiveTypeInfo,
   ModelTypeInfo,
-  TypeInfo,
   ElementType,
   PrimitiveType,
-  GroupModelTypeInfo,
   ArrayModelTypeInfo,
 } from './types';
 
@@ -22,7 +20,8 @@ export type ModelSpec<T> = T extends boolean
   ? Spec<T>
   : T extends Array<infer E>
   ? ArraySpec<E>
-  : {
+  : // If I don't inline this here it doesn't work nice for code completion
+    {
       -readonly [Key in keyof T]-?: ModelSpec<T[Key]>;
     };
 
@@ -58,7 +57,7 @@ export class Spec<T> {
   protected validators: [ValidFn<T>, string][] = [];
   protected asyncValidators: [AsyncValidFn<T>, string][] = [];
   protected disablers: [Spec<unknown>, CondFn<unknown>, string][] = [];
-  protected hiders: [Spec<unknown>, CondFn<T>][] = [];
+  protected hiders: [Spec<unknown>, CondFn<unknown>][] = [];
 
   should(fn: (value: T, index?: number) => ValidationErrors): Spec<T>;
   should(fn: (value: T, index?: number) => boolean, message: string): Spec<T>;
@@ -82,27 +81,36 @@ export class Spec<T> {
     return this;
   }
 
-  disableIf<E>(
-    scope: Spec<E>,
-    fn: (value: E, index?: number) => boolean,
-    tooltip?: string
-  ): Spec<T> {
-    this.disablers.push([scope as Spec<unknown>, fn, tooltip]);
+  disableIf<E>(scope: ModelSpec<E>, fn: CondFn<E>, tooltip?: string): Spec<T> {
+    this.disablers.push([toSpec(scope) as Spec<unknown>, fn, tooltip]);
     return this;
   }
 
-  hideIf<E>(
-    scope: Spec<E>,
-    fn: (value: T, index?: number) => boolean
-  ): Spec<T> {
-    this.hiders.push([scope as Spec<unknown>, fn]);
+  hideIf<E>(scope: ModelSpec<E>, fn: CondFn<E>): Spec<T> {
+    this.hiders.push([toSpec(scope) as Spec<unknown>, fn]);
     return this;
   }
 }
 
+type SpecMap = Map<Spec<unknown>, [CondFn<unknown>, string?][]>;
+
 export class SpecImpl<T> extends Spec<T> {
   constructor(type: ModelTypeInfo<T>) {
     super(type);
+  }
+
+  getDisablersMap() {
+    const map: SpecMap = new Map();
+    for (const disabler of this.disablers) {
+      map.set(disabler[0], null);
+    }
+    for (const spec of map.keys()) {
+      const specDisablers = this.disablers
+        .filter((d) => d[0] === spec)
+        .map((d) => [d[1] as CondFn<T>, d[2]]);
+      map.set(spec, specDisablers as [CondFn<T>, string?][]);
+    }
+    return map;
   }
 
   getValidators(): ValidatorFn[] {
@@ -168,7 +176,7 @@ function createSpecs<T>(modelType: ModelTypeInfo<T>): ModelSpec<T> {
   return spec as ModelSpec<T>;
 }
 
-export function modelValidation<T>(
+export function ceateModel<T>(
   modelTyping: ModelTypeInfo<T>,
   createModelSpecification: (model: ModelSpec<T>) => void
 ): GroupSpec<T> {

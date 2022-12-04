@@ -1,7 +1,7 @@
 import { interval } from 'rxjs';
 import { first, map } from 'rxjs/operators';
-import { ModelTypeInfo, PrimitiveType, Types } from './framework/types';
-import { group, modelValidation } from './framework/validation';
+import { PrimitiveType, Types } from './framework/types';
+import { group, ceateModel } from './framework/validation';
 
 // Suport Date as a first-class value in forms
 //declare interface Date extends PrimitiveType {}
@@ -39,7 +39,7 @@ export interface Data {
   };
 }
 
-export const dataModel = modelValidation<Data>(
+export const dataModel = ceateModel<Data>(
   {
     someInt: Types.int,
     opaqueType: Types.opaque<ComplexType>('complexType'),
@@ -76,6 +76,11 @@ export const dataModel = modelValidation<Data>(
         !innerObj.hasEmbedded ||
         (!!innerObj.embedded && innerObj.embedded.anotherInt > 0),
       'If hasEmbedded is true, there needs to be an embedded object!'
+    );
+    group(m.innerObj.embedded).disableIf(
+      m.innerObj,
+      (v) => !v.hasEmbedded,
+      "Not needed if it doesn't have an embedded object"
     );
     m.innerObj.intArray.element.should(
       (v) => v >= 0 && v <= 100,

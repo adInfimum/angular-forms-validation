@@ -22,6 +22,12 @@ export type ModelTypeInfo<T> = T extends boolean
   ? ArrayModelTypeInfo<E>
   : GroupModelTypeInfo<T>;
 
+export type GroupType<T> = {
+  [Key in keyof T]: T[Key];
+};
+
+export type ArrayType<T> = ElementType<T>[];
+
 export type GroupModelTypeInfo<T> = {
   -readonly [Key in keyof T]-?: ModelTypeInfo<T[Key]>;
 };
