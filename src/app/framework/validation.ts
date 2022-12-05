@@ -55,12 +55,15 @@ export type AsyncValidFn<T> = (
 export type CondFn<T> = (value: T, index?: number) => boolean;
 
 export class Spec<T> {
-  constructor(public type: ModelTypeInfo<T>) {}
+  constructor(
+    public readonly type: ModelTypeInfo<T>,
+    public readonly name: string
+  ) {}
 
-  protected validators: [ValidFn<T>, string][] = [];
-  protected asyncValidators: [AsyncValidFn<T>, string][] = [];
-  protected disablers: [Spec<unknown>, CondFn<unknown>, string][] = [];
-  protected hiders: [Spec<unknown>, CondFn<unknown>][] = [];
+  protected readonly validators: [ValidFn<T>, string][] = [];
+  protected readonly asyncValidators: [AsyncValidFn<T>, string][] = [];
+  protected readonly disablers: [Spec<unknown>, CondFn<unknown>, string][] = [];
+  protected readonly hiders: [Spec<unknown>, CondFn<unknown>][] = [];
 
   should(fn: (value: T, index?: number) => ValidationErrors): Spec<T>;
   should(fn: (value: T, index?: number) => boolean, message: string): Spec<T>;
@@ -98,8 +101,8 @@ export class Spec<T> {
 export type SpecMap = Map<Spec<unknown>, [CondFn<unknown>, string?][]>;
 
 export class SpecImpl<T> extends Spec<T> {
-  constructor(type: ModelTypeInfo<T>) {
-    super(type);
+  constructor(type: ModelTypeInfo<T>, name: string) {
+    super(type, name);
   }
 
   getDisablersMap() {
@@ -164,19 +167,23 @@ function normalizeErrorResult(
 export class ArraySpec<E> extends SpecImpl<E[]> {
   public element: Spec<E>;
 
-  constructor(type: ModelTypeInfo<E[]>) {
-    super(type);
-    this.element = new SpecImpl<E>(type[0]);
+  constructor(type: ModelTypeInfo<E[]>, name: string) {
+    super(type, name);
+    this.element = new SpecImpl<E>(type[0], '0');
   }
 }
 
-function createSpecs<T>(modelType: ModelTypeInfo<T>): ModelSpec<T> {
+function createSpecs<T>(
+  modelType: ModelTypeInfo<T>,
+  name: string
+): ModelSpec<T> {
   if (isPrimitiveTypeInfo(modelType)) {
-    return new SpecImpl<T>(modelType) as Spec<T> as ModelSpec<T>;
+    return new SpecImpl<T>(modelType, name) as Spec<T> as ModelSpec<T>;
   } else if (Array.isArray(modelType)) {
     type E = ElementType<T>;
     return new ArraySpec<E>(
-      modelType as ArrayModelTypeInfo<E>
+      modelType as ArrayModelTypeInfo<E>,
+      name
     ) as unknown as ModelSpec<T>;
   }
   type P = T[keyof T];
@@ -184,11 +191,11 @@ function createSpecs<T>(modelType: ModelTypeInfo<T>): ModelSpec<T> {
   for (const p of Object.keys(modelType)) {
     const prop = p as keyof T;
     const field = modelType[prop as keyof ModelTypeInfo<T>];
-    spec[prop] = createSpecs(field as ModelTypeInfo<P>);
+    spec[prop] = createSpecs(field as ModelTypeInfo<P>, prop.toString());
   }
   Object.defineProperty(spec, '__group_model_spec_do_not_access', {
     enumerable: false,
-    value: new SpecImpl<T>(modelType),
+    value: new SpecImpl<T>(modelType, name),
   });
   return spec as ModelSpec<T>;
 }
@@ -197,7 +204,7 @@ export function ceateModel<T>(
   modelTyping: ModelTypeInfo<T>,
   createModelSpecification: (model: ModelSpec<T>) => void
 ): GroupSpec<T> {
-  const spec = createSpecs(modelTyping);
+  const spec = createSpecs(modelTyping, '');
   createModelSpecification(spec);
   return spec as GroupSpec<T>;
 }

@@ -5,21 +5,14 @@ import {
   EnchancedControl,
   FormControls,
 } from './framework/forms';
-import { ModelTypeInfo } from './framework/types';
+import { ModelSpec, Spec, toSpec } from './framework/validation';
 import { ComplexObject, ComplexType, Data, dataModel } from './model';
 import { combineErrorsToObject } from './support';
 
-@Pipe({ name: 'isVisible' })
-export class VisiblePipe implements PipeTransform {
-  transform(control: AbstractControl<unknown>): boolean {
-    return !(control as EnchancedControl).isHidden;
-  }
-}
-
-@Pipe({ name: 'disableTooltip' })
-export class TooltipPipe implements PipeTransform {
-  transform(control: AbstractControl<unknown>): string {
-    return (control as EnchancedControl).disabledTooltip || '';
+@Pipe({ name: 'name' })
+export class PropNamePipe implements PipeTransform {
+  transform<T>(prop: ModelSpec<T>): string {
+    return toSpec(prop).name;
   }
 }
 
@@ -32,16 +25,21 @@ export class AppComponent {
   name = 'Angular ' + VERSION.major;
 
   form: FormControls<Data>;
+  model = dataModel;
 
   public allErrors() {
     return JSON.stringify(combineErrorsToObject(this.form), null, 2);
   }
 
+  // TODO: Suboptimal due to kicking off change detection every time, this should be accessible normally, but I can't make a working `declare class AbstractControl`-like declaration to make TS understand there might be these properties on the objects.
+  // TODO: Also it has an issue with the initial values not being refreshed.
   public isVisible(control: AbstractControl<unknown>) {
     return !(control as EnchancedControl).isHidden;
   }
 
   constructor() {
+    console.log(JSON.stringify(dataModel, null, 2));
+    // That's what you would normally do
     // const f = new FormGroup({
     //   someInt: new FormControl(123),
     //   someText: new FormControl('testing'),
@@ -57,6 +55,7 @@ export class AppComponent {
     // let value: FormValue<typeof f>;
     // value = f.value;
 
+    // Date needs a special case I think as I can't make a working `declare class Date` that tells TS it's a PrimitiveType
     const d: Date = new Date('1995-12-17T03:24:00');
     const d2 = new Date(Date.now());
     d2.getDay();

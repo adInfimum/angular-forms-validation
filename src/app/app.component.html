@@ -2,18 +2,25 @@
 <p>Start editing to see some magic happen :)</p>
 
 <form [formGroup]="form">
-  int: <input formControlName="someInt" /><br />
-  text: <input formControlName="someText" /><br />
-  opaque type: <input formControlName="opaqueType" /><br />
-  opaque clas: <input formControlName="someClass" /><br />
-  <div formGroupName="innerObj" style="padding-left:1em">
-    has embedded: <input type="checkbox" formControlName="hasEmbedded" /><br />
-    <div formGroupName="embedded">
-      another int: <input formControlName="anotherInt" /><br />
+  int: <input [formControlName]="model.someInt | name" /><br />
+  text: <input [formControlName]="model.someText | name" /><br />
+  opaque type: <input [formControlName]="model.opaqueType | name" /><br />
+  opaque clas: <input [formControlName]="model.someClass | name" /><br />
+  <div [formGroupName]="model.innerObj | name" style="padding-left:1em">
+    has embedded:
+    <input
+      type="checkbox"
+      [formControlName]="model.innerObj.hasEmbedded | name"
+    /><br />
+    <div [formGroupName]="model.innerObj.embedded | name">
+      another int:
+      <input
+        [formControlName]="model.innerObj.embedded.anotherInt | name"
+      /><br />
     </div>
     Array: <br />
     <div
-      formArrayName="intArray"
+      [formArrayName]="model.innerObj.intArray | name"
       *ngIf="isVisible(form.controls.innerObj.controls.intArray)"
     >
       <div
@@ -28,7 +35,7 @@
   </div>
 </form>
 
-<p>Array visible: {{ form.controls.innerObj.controls.intArray | isVisible }}</p>
+<p>Array visible: {{ isVisible(form.controls.innerObj.controls.intArray) }}</p>
 <p>Form status: {{ form.status }}</p>
 <div>
   Form value:
