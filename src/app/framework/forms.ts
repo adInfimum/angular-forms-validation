@@ -4,7 +4,7 @@ import {
   FormControl,
   FormGroup,
 } from '@angular/forms';
-import { Observable, takeUntil } from 'rxjs';
+import { Observable, takeUntil, startWith } from 'rxjs';
 import {
   ArrayType,
   ElementType,
@@ -196,8 +196,13 @@ function valueChanges<T>(
   destroy?: DestroyObservable
 ): Observable<T> {
   return destroy
-    ? (control as AbstractControl<T>).valueChanges.pipe(takeUntil(destroy))
-    : (control as AbstractControl<T>).valueChanges;
+    ? (control as AbstractControl<T>).valueChanges.pipe(
+        startWith(control.value as T),
+        takeUntil(destroy)
+      )
+    : (control as AbstractControl<T>).valueChanges.pipe(
+        startWith(control.value as T)
+      );
 }
 
 function setDisabled<T>(
